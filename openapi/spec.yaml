@@ -1,0 +1,1009 @@
+openapi: 3.1.0
+info:
+  title: Pennant API
+  version: 0.1.0
+  summary: Feature flag / remote config API with real-time SDK push.
+  description: |
+    Pennant is a feature flag and remote configuration service. Define flags
+    in a workspace, configure them per environment with targeting rules, and
+    let SDKs evaluate them — either by hitting `/v1/evaluate` directly or by
+    bootstrapping from `/v1/snapshot` and subscribing to `/v1/stream` for
+    real-time updates.
+
+    This spec is the source of truth. Laravel controllers conform to it; SDKs
+    are generated from it. Run `npm run spectral` to validate locally.
+  contact:
+    name: Philip Rehberger
+    url: https://pennant.philiprehberger.com
+  license:
+    name: MIT
+    identifier: MIT
+
+servers:
+  - url: https://api.pennant.philiprehberger.com
+    description: Production
+  - url: http://localhost:8000
+    description: Local development
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Health
+    description: Liveness check.
+  - name: Workspaces
+    description: Tenant boundary; one workspace per customer.
+  - name: Environments
+    description: Per-workspace environments (e.g. dev / staging / prod).
+  - name: Flags
+    description: Flag definitions and per-environment configuration.
+  - name: Segments
+    description: Reusable rule groupings referenced from flag configurations.
+  - name: Evaluation
+    description: SDK-facing evaluation, snapshot bootstrap, and real-time stream.
+  - name: API Keys
+    description: Server and client keys for SDK authentication.
+  - name: Audit
+    description: Read-only mutation history.
+
+paths:
+  /v1/healthz:
+    get:
+      summary: Liveness check
+      description: Returns 200 if the API is up. Does not require auth.
+      operationId: healthz
+      tags: [Health]
+      security: []
+      responses:
+        "200":
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /v1/workspaces/current:
+    get:
+      summary: Get the workspace the current API key belongs to
+      operationId: getCurrentWorkspace
+      tags: [Workspaces]
+      responses:
+        "200":
+          description: The workspace.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/environments:
+    get:
+      summary: List environments
+      operationId: listEnvironments
+      tags: [Environments]
+      responses:
+        "200":
+          description: Page of environments.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnvironmentList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      summary: Create an environment
+      operationId: createEnvironment
+      tags: [Environments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnvironmentInput"
+      responses:
+        "201":
+          description: Environment created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/environments/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      summary: Retrieve an environment
+      operationId: getEnvironment
+      tags: [Environments]
+      responses:
+        "200":
+          description: The environment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      summary: Update an environment
+      operationId: updateEnvironment
+      tags: [Environments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnvironmentInput"
+      responses:
+        "200":
+          description: The updated environment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete an environment
+      operationId: deleteEnvironment
+      tags: [Environments]
+      responses:
+        "204":
+          description: Deleted.
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/flags:
+    get:
+      summary: List flags
+      operationId: listFlags
+      tags: [Flags]
+      parameters:
+        - in: query
+          name: cursor
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Page of flags.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlagList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      summary: Create a flag
+      operationId: createFlag
+      tags: [Flags]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlagInput"
+      responses:
+        "201":
+          description: Flag created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flag"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/flags/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      summary: Retrieve a flag
+      operationId: getFlag
+      tags: [Flags]
+      responses:
+        "200":
+          description: The flag.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flag"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      summary: Update a flag
+      operationId: updateFlag
+      tags: [Flags]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlagInput"
+      responses:
+        "200":
+          description: The updated flag.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flag"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Archive a flag
+      description: Soft-delete; flag stops being returned by SDK snapshots.
+      operationId: archiveFlag
+      tags: [Flags]
+      responses:
+        "204":
+          description: Archived.
+
+  /v1/flags/{id}/configurations/{environmentKey}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - in: path
+        name: environmentKey
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Get the configuration for a flag in an environment
+      operationId: getFlagConfiguration
+      tags: [Flags]
+      responses:
+        "200":
+          description: The configuration.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlagConfiguration"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Replace the configuration for a flag in an environment
+      operationId: putFlagConfiguration
+      tags: [Flags]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlagConfigurationInput"
+      responses:
+        "200":
+          description: The updated configuration.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlagConfiguration"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/flags/{id}/promote:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      summary: Promote a flag configuration from one environment to another
+      operationId: promoteFlag
+      tags: [Flags]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from: { type: string }
+                to: { type: string }
+                reason: { type: string }
+              required: [from, to]
+      responses:
+        "200":
+          description: The new configuration on the target environment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlagConfiguration"
+
+  /v1/flags/{id}/kill:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      summary: Kill-switch — force a flag off in every environment
+      operationId: killFlag
+      tags: [Flags]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: string, minLength: 1 }
+              required: [reason]
+      responses:
+        "200":
+          description: The flag, now off in every environment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Flag"
+
+  /v1/segments:
+    get:
+      summary: List segments
+      operationId: listSegments
+      tags: [Segments]
+      responses:
+        "200":
+          description: Page of segments.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegmentList"
+    post:
+      summary: Create a segment
+      operationId: createSegment
+      tags: [Segments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SegmentInput"
+      responses:
+        "201":
+          description: Segment created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Segment"
+
+  /v1/segments/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      summary: Retrieve a segment
+      operationId: getSegment
+      tags: [Segments]
+      responses:
+        "200":
+          description: The segment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Segment"
+    patch:
+      summary: Update a segment
+      operationId: updateSegment
+      tags: [Segments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SegmentInput"
+      responses:
+        "200":
+          description: The updated segment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Segment"
+    delete:
+      summary: Delete a segment
+      operationId: deleteSegment
+      tags: [Segments]
+      responses:
+        "204":
+          description: Deleted.
+
+  /v1/api-keys:
+    get:
+      summary: List API keys
+      operationId: listApiKeys
+      tags: [API Keys]
+      responses:
+        "200":
+          description: Page of API keys (hashes never returned).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyList"
+    post:
+      summary: Mint an API key
+      description: |
+        Returns the plaintext secret once and only once. Server keys can
+        read full rule metadata; client keys see only pre-evaluated values
+        and are safe to embed in browser bundles.
+      operationId: createApiKey
+      tags: [API Keys]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyInput"
+      responses:
+        "201":
+          description: API key minted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyMinted"
+
+  /v1/api-keys/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    delete:
+      summary: Revoke an API key
+      operationId: revokeApiKey
+      tags: [API Keys]
+      responses:
+        "204":
+          description: Revoked.
+
+  /v1/evaluate:
+    post:
+      summary: Evaluate one or more flags against a context
+      description: |
+        Server-side evaluation. Pass a `context` and a list of `flags`; get
+        back resolved values + reasons + the rule that matched.
+
+        Use the snapshot endpoint instead if you can — local SDK evaluation
+        is faster and cheaper, and behaves identically thanks to the
+        cross-implementation corpus.
+      operationId: evaluate
+      tags: [Evaluation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvaluateInput"
+      responses:
+        "200":
+          description: Resolved flag values keyed by flag key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvaluateResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/snapshot:
+    get:
+      summary: Bootstrap snapshot for SDK initialization
+      description: |
+        Returns every flag in the environment. Server keys get raw rules;
+        client keys get pre-evaluated values for the supplied context (the
+        SDK can't see the rule shapes, so embedded client keys leak no rule
+        logic).
+      operationId: getSnapshot
+      tags: [Evaluation]
+      parameters:
+        - in: query
+          name: environment
+          required: true
+          schema:
+            type: string
+          description: Environment key (e.g. "prod").
+        - in: query
+          name: context
+          required: false
+          schema:
+            type: string
+          description: |
+            Required for client-key callers. JSON-encoded then base64url-
+            encoded context object. Server-key callers may omit it and get
+            raw rules instead.
+      responses:
+        "200":
+          description: The snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Snapshot"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/stream:
+    get:
+      summary: Server-Sent Events stream of flag changes
+      description: |
+        Long-lived `text/event-stream` connection. Whenever a flag
+        configuration or referenced segment changes in the requested
+        environment, an event is pushed with the diff.
+
+        Browsers / EventSource clients should pass the key via `?key=`
+        since EventSource does not support custom Authorization headers.
+
+        Send `Last-Event-ID` to resume from the last seen event; the
+        broadcaster replays up to 15 minutes of history.
+      operationId: streamFlags
+      tags: [Evaluation]
+      security: []
+      parameters:
+        - in: query
+          name: environment
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: key
+          required: false
+          schema:
+            type: string
+        - in: header
+          name: Last-Event-ID
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: SSE stream of flag-change events.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /v1/audit:
+    get:
+      summary: List audit events
+      operationId: listAuditEvents
+      tags: [Audit]
+      parameters:
+        - in: query
+          name: flag
+          schema:
+            type: string
+        - in: query
+          name: environment
+          schema:
+            type: string
+        - in: query
+          name: cursor
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Page of audit events.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEventList"
+
+components:
+  parameters:
+    Id:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+      description: ULID.
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      description: |
+        `pn_srv_live_…` / `pn_srv_test_…` for server keys.
+        `pn_clt_live_…` / `pn_clt_test_…` for client keys.
+
+  responses:
+    BadRequest:
+      description: Validation or input error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: Missing or invalid API key.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: Key kind not permitted for this endpoint.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: Resource conflict (duplicate key, etc.).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+      required: [title, status]
+
+    Health:
+      type: object
+      properties:
+        status: { type: string, enum: [healthy] }
+        version: { type: string }
+      required: [status, version]
+
+    Workspace:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        created_at: { type: string, format: date-time }
+      required: [id, name, slug]
+
+    Environment:
+      type: object
+      properties:
+        id: { type: string }
+        key: { type: string, description: "stable identifier, e.g. 'prod'" }
+        name: { type: string }
+        production: { type: boolean }
+        require_approval: { type: boolean }
+        created_at: { type: string, format: date-time }
+      required: [id, key, name, production, require_approval]
+
+    EnvironmentInput:
+      type: object
+      properties:
+        key: { type: string, minLength: 1, maxLength: 32 }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        production: { type: boolean, default: false }
+        require_approval: { type: boolean, default: false }
+      required: [key, name]
+
+    EnvironmentList:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Environment" }
+      required: [data]
+
+    Flag:
+      type: object
+      properties:
+        id: { type: string }
+        key: { type: string }
+        type: { type: string, enum: [bool, string, number, json] }
+        description: { type: string }
+        default_value: {}
+        archived_at: { type: string, format: date-time, nullable: true }
+        configurations:
+          type: array
+          items: { $ref: "#/components/schemas/FlagConfiguration" }
+        created_at: { type: string, format: date-time }
+      required: [id, key, type, default_value]
+
+    FlagInput:
+      type: object
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: "^[a-z0-9][a-z0-9_-]*$"
+        type: { type: string, enum: [bool, string, number, json] }
+        description: { type: string, maxLength: 500 }
+        default_value: {}
+      required: [key, type, default_value]
+
+    FlagList:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Flag" }
+        next_cursor: { type: string, nullable: true }
+      required: [data]
+
+    FlagConfiguration:
+      type: object
+      properties:
+        id: { type: string }
+        flag_id: { type: string }
+        environment_key: { type: string }
+        state: { type: string, enum: [on, off] }
+        variation: {}
+        bucketing_attribute: { type: string }
+        bucketing_seed: { type: string }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/TargetingRule" }
+        updated_at: { type: string, format: date-time }
+      required: [id, flag_id, environment_key, state, variation, rules]
+
+    FlagConfigurationInput:
+      type: object
+      properties:
+        state: { type: string, enum: [on, off] }
+        variation: {}
+        bucketing_attribute: { type: string, default: userId }
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/TargetingRuleInput" }
+      required: [state, variation]
+
+    TargetingRule:
+      type: object
+      properties:
+        id: { type: string }
+        priority: { type: integer }
+        description: { type: string }
+        condition: { $ref: "#/components/schemas/RuleExpression" }
+        variation: {}
+      required: [priority, condition, variation]
+
+    TargetingRuleInput:
+      type: object
+      properties:
+        priority: { type: integer, minimum: 0 }
+        description: { type: string, maxLength: 200 }
+        condition: { $ref: "#/components/schemas/RuleExpression" }
+        variation: {}
+      required: [priority, condition, variation]
+
+    RuleExpression:
+      description: |
+        A JSON expression tree. Supported forms:
+
+        - `{ attribute, op, value }` — terminal comparison.
+        - `{ segment }` — references a segment by key.
+        - `{ all: [expr, …] }` — AND.
+        - `{ any: [expr, …] }` — OR.
+        - `{ none: [expr, …] }` — NOT (matches if no child matches).
+
+        Operators (terminal `op`):
+        equals, not_equals, in, not_in, contains, not_contains,
+        starts_with, ends_with, regex, gt, gte, lt, lte, before, after,
+        percentage.
+
+        The `percentage` operator uses the flag configuration's
+        `bucketing_attribute` + `bucketing_seed` to deterministically place
+        the context in `[0, 1)`; rule matches when bucket < value / 100.
+      oneOf:
+        - type: object
+          properties:
+            attribute: { type: string }
+            op:
+              type: string
+              enum:
+                [
+                  equals,
+                  not_equals,
+                  in,
+                  not_in,
+                  contains,
+                  not_contains,
+                  starts_with,
+                  ends_with,
+                  regex,
+                  gt,
+                  gte,
+                  lt,
+                  lte,
+                  before,
+                  after,
+                  percentage,
+                ]
+            value: {}
+          required: [attribute, op, value]
+        - type: object
+          properties:
+            segment: { type: string }
+          required: [segment]
+        - type: object
+          properties:
+            all:
+              type: array
+              items: { $ref: "#/components/schemas/RuleExpression" }
+          required: [all]
+        - type: object
+          properties:
+            any:
+              type: array
+              items: { $ref: "#/components/schemas/RuleExpression" }
+          required: [any]
+        - type: object
+          properties:
+            none:
+              type: array
+              items: { $ref: "#/components/schemas/RuleExpression" }
+          required: [none]
+
+    Segment:
+      type: object
+      properties:
+        id: { type: string }
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+        condition: { $ref: "#/components/schemas/RuleExpression" }
+        created_at: { type: string, format: date-time }
+      required: [id, key, name, condition]
+
+    SegmentInput:
+      type: object
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: "^[a-z0-9][a-z0-9_-]*$"
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 500 }
+        condition: { $ref: "#/components/schemas/RuleExpression" }
+      required: [key, name, condition]
+
+    SegmentList:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/Segment" }
+      required: [data]
+
+    ApiKey:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [server, client] }
+        environment_key: { type: string, nullable: true }
+        prefix: { type: string }
+        last_four: { type: string }
+        last_used_at: { type: string, format: date-time, nullable: true }
+        revoked_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+      required: [id, kind, prefix, last_four]
+
+    ApiKeyInput:
+      type: object
+      properties:
+        name: { type: string, maxLength: 100 }
+        kind: { type: string, enum: [server, client] }
+        environment_key:
+          type: string
+          nullable: true
+          description: Restrict to one environment; null = all environments.
+      required: [kind]
+
+    ApiKeyMinted:
+      allOf:
+        - $ref: "#/components/schemas/ApiKey"
+        - type: object
+          properties:
+            secret:
+              type: string
+              description: Plaintext key — shown once at creation and never again.
+          required: [secret]
+
+    ApiKeyList:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/ApiKey" }
+      required: [data]
+
+    EvaluateInput:
+      type: object
+      properties:
+        environment: { type: string }
+        context:
+          type: object
+          additionalProperties: true
+          description: |
+            User attributes used for rule evaluation. By convention
+            includes `userId`; other keys are free-form (`plan`, `country`,
+            `email`, …).
+        flags:
+          type: array
+          items: { type: string }
+          description: Flag keys to evaluate. Omit to evaluate all.
+      required: [environment, context]
+
+    EvaluateResult:
+      type: object
+      additionalProperties:
+        type: object
+        properties:
+          value: {}
+          reason:
+            type: string
+            enum: [default, off, rule_match, percentage_rollout, fallthrough]
+          rule_id: { type: string, nullable: true }
+        required: [value, reason]
+
+    Snapshot:
+      type: object
+      properties:
+        environment: { type: string }
+        version: { type: string, description: ULID; opaque to the SDK; used as Last-Event-ID. }
+        kind: { type: string, enum: [server, client], description: Reflects the calling key kind. }
+        flags:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              type: { type: string }
+              # Server snapshots include the full configuration; client
+              # snapshots include only the pre-evaluated `value` + `reason`.
+              configuration:
+                $ref: "#/components/schemas/FlagConfiguration"
+              value: {}
+              reason: { type: string }
+            required: [key, type]
+        segments:
+          type: array
+          description: Only present on server snapshots.
+          items: { $ref: "#/components/schemas/Segment" }
+      required: [environment, version, kind, flags]
+
+    AuditEvent:
+      type: object
+      properties:
+        id: { type: string }
+        actor_type: { type: string, enum: [user, api_key] }
+        actor_id: { type: string, nullable: true }
+        actor_label: { type: string, description: Display name resolved from actor. }
+        subject_type: { type: string }
+        subject_id: { type: string }
+        action: { type: string }
+        diff: { type: object, additionalProperties: true }
+        reason: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+      required: [id, actor_type, subject_type, subject_id, action, created_at]
+
+    AuditEventList:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/AuditEvent" }
+        next_cursor: { type: string, nullable: true }
+      required: [data]

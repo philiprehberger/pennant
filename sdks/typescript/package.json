@@ -1,0 +1,42 @@
+{
+  "name": "@philiprehberger/pennant",
+  "version": "0.1.0",
+  "description": "Pennant SDK — feature flags with real-time SSE push, deterministic local bucketing, and offline-resilient persistence.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/philiprehberger/pennant.git",
+    "directory": "sdks/typescript"
+  },
+  "license": "MIT",
+  "author": "Philip Rehberger",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.0.0"
+  }
+}

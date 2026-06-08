@@ -1,0 +1,277 @@
+{
+  "version": "1",
+  "description": "Pennant rule-engine drift corpus. Every implementation (PHP server, TypeScript SDK, future Python/Go SDKs) runs each case in its native test runner and must produce the same `expected` for the same `condition` + `context`. Drift here means experiment data silently corrupts in production — the corpus is the contract.",
+  "segments": {
+    "beta_users": {
+      "all": [
+        { "attribute": "email", "op": "ends_with", "value": "@beta.example" }
+      ]
+    },
+    "us_premium": {
+      "all": [
+        { "attribute": "country", "op": "equals", "value": "US" },
+        { "attribute": "plan", "op": "in", "value": ["growth", "enterprise"] }
+      ]
+    },
+    "nested_segment": {
+      "any": [
+        { "segment": "beta_users" },
+        { "attribute": "id", "op": "equals", "value": "alice" }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "name": "equals matches",
+      "condition": { "attribute": "plan", "op": "equals", "value": "enterprise" },
+      "context": { "plan": "enterprise" },
+      "expected": true
+    },
+    {
+      "name": "equals mismatches",
+      "condition": { "attribute": "plan", "op": "equals", "value": "enterprise" },
+      "context": { "plan": "growth" },
+      "expected": false
+    },
+    {
+      "name": "equals on missing attribute is false",
+      "condition": { "attribute": "plan", "op": "equals", "value": "enterprise" },
+      "context": {},
+      "expected": false
+    },
+    {
+      "name": "not_equals matches missing attribute",
+      "condition": { "attribute": "plan", "op": "not_equals", "value": "enterprise" },
+      "context": {},
+      "expected": true
+    },
+    {
+      "name": "in matches",
+      "condition": { "attribute": "plan", "op": "in", "value": ["growth", "enterprise"] },
+      "context": { "plan": "growth" },
+      "expected": true
+    },
+    {
+      "name": "in misses",
+      "condition": { "attribute": "plan", "op": "in", "value": ["growth", "enterprise"] },
+      "context": { "plan": "hobby" },
+      "expected": false
+    },
+    {
+      "name": "not_in matches",
+      "condition": { "attribute": "plan", "op": "not_in", "value": ["hobby"] },
+      "context": { "plan": "growth" },
+      "expected": true
+    },
+    {
+      "name": "contains matches substring",
+      "condition": { "attribute": "email", "op": "contains", "value": "@example" },
+      "context": { "email": "alice@example.com" },
+      "expected": true
+    },
+    {
+      "name": "contains misses",
+      "condition": { "attribute": "email", "op": "contains", "value": "@other" },
+      "context": { "email": "alice@example.com" },
+      "expected": false
+    },
+    {
+      "name": "starts_with matches",
+      "condition": { "attribute": "email", "op": "starts_with", "value": "alice" },
+      "context": { "email": "alice@example.com" },
+      "expected": true
+    },
+    {
+      "name": "ends_with matches",
+      "condition": { "attribute": "email", "op": "ends_with", "value": ".com" },
+      "context": { "email": "alice@example.com" },
+      "expected": true
+    },
+    {
+      "name": "regex matches",
+      "condition": { "attribute": "email", "op": "regex", "value": "^[a-z]+@example\\.com$" },
+      "context": { "email": "alice@example.com" },
+      "expected": true
+    },
+    {
+      "name": "regex misses",
+      "condition": { "attribute": "email", "op": "regex", "value": "^[A-Z]" },
+      "context": { "email": "alice@example.com" },
+      "expected": false
+    },
+    {
+      "name": "gt matches int",
+      "condition": { "attribute": "age", "op": "gt", "value": 18 },
+      "context": { "age": 25 },
+      "expected": true
+    },
+    {
+      "name": "gte equal numbers",
+      "condition": { "attribute": "age", "op": "gte", "value": 25 },
+      "context": { "age": 25 },
+      "expected": true
+    },
+    {
+      "name": "lt with floats",
+      "condition": { "attribute": "score", "op": "lt", "value": 0.5 },
+      "context": { "score": 0.42 },
+      "expected": true
+    },
+    {
+      "name": "lt on string is false (type mismatch)",
+      "condition": { "attribute": "age", "op": "lt", "value": 100 },
+      "context": { "age": "old" },
+      "expected": false
+    },
+    {
+      "name": "before matches date",
+      "condition": { "attribute": "signup", "op": "before", "value": "2026-06-01" },
+      "context": { "signup": "2026-05-15" },
+      "expected": true
+    },
+    {
+      "name": "after matches date",
+      "condition": { "attribute": "signup", "op": "after", "value": "2026-06-01" },
+      "context": { "signup": "2026-07-01" },
+      "expected": true
+    },
+    {
+      "name": "all combinator matches",
+      "condition": {
+        "all": [
+          { "attribute": "plan", "op": "equals", "value": "enterprise" },
+          { "attribute": "country", "op": "equals", "value": "US" }
+        ]
+      },
+      "context": { "plan": "enterprise", "country": "US" },
+      "expected": true
+    },
+    {
+      "name": "all combinator fails on one child",
+      "condition": {
+        "all": [
+          { "attribute": "plan", "op": "equals", "value": "enterprise" },
+          { "attribute": "country", "op": "equals", "value": "US" }
+        ]
+      },
+      "context": { "plan": "enterprise", "country": "DE" },
+      "expected": false
+    },
+    {
+      "name": "any combinator matches first",
+      "condition": {
+        "any": [
+          { "attribute": "plan", "op": "equals", "value": "enterprise" },
+          { "attribute": "plan", "op": "equals", "value": "growth" }
+        ]
+      },
+      "context": { "plan": "growth" },
+      "expected": true
+    },
+    {
+      "name": "none combinator passes when no child matches",
+      "condition": {
+        "none": [
+          { "attribute": "plan", "op": "equals", "value": "enterprise" }
+        ]
+      },
+      "context": { "plan": "hobby" },
+      "expected": true
+    },
+    {
+      "name": "none combinator fails when any child matches",
+      "condition": {
+        "none": [
+          { "attribute": "plan", "op": "equals", "value": "enterprise" }
+        ]
+      },
+      "context": { "plan": "enterprise" },
+      "expected": false
+    },
+    {
+      "name": "deeply nested combinators",
+      "condition": {
+        "any": [
+          {
+            "all": [
+              { "attribute": "country", "op": "equals", "value": "US" },
+              { "attribute": "plan", "op": "in", "value": ["growth", "enterprise"] }
+            ]
+          },
+          { "attribute": "email", "op": "ends_with", "value": "@admin" }
+        ]
+      },
+      "context": { "country": "DE", "plan": "growth", "email": "carol@admin" },
+      "expected": true
+    },
+    {
+      "name": "segment reference matches",
+      "condition": { "segment": "beta_users" },
+      "context": { "email": "test@beta.example" },
+      "expected": true
+    },
+    {
+      "name": "segment reference misses",
+      "condition": { "segment": "beta_users" },
+      "context": { "email": "user@example.com" },
+      "expected": false
+    },
+    {
+      "name": "segment reference + combinator",
+      "condition": {
+        "all": [
+          { "segment": "us_premium" },
+          { "attribute": "age", "op": "gte", "value": 21 }
+        ]
+      },
+      "context": { "country": "US", "plan": "enterprise", "age": 30 },
+      "expected": true
+    },
+    {
+      "name": "nested segment reference",
+      "condition": { "segment": "nested_segment" },
+      "context": { "id": "alice" },
+      "expected": true
+    },
+    {
+      "name": "missing segment reference is false",
+      "condition": { "segment": "does_not_exist" },
+      "context": {},
+      "expected": false
+    },
+    {
+      "name": "dotted attribute path",
+      "condition": { "attribute": "address.country", "op": "equals", "value": "US" },
+      "context": { "address": { "country": "US" } },
+      "expected": true
+    },
+    {
+      "name": "dotted attribute path missing",
+      "condition": { "attribute": "address.country", "op": "equals", "value": "US" },
+      "context": { "address": {} },
+      "expected": false
+    },
+    {
+      "name": "unknown operator is false",
+      "condition": { "attribute": "plan", "op": "approximately", "value": "x" },
+      "context": { "plan": "x" },
+      "expected": false
+    },
+    {
+      "name": "numeric equality across int and float",
+      "condition": { "attribute": "age", "op": "equals", "value": 25 },
+      "context": { "age": 25.0 },
+      "expected": true
+    }
+  ],
+  "bucketing": {
+    "description": "Deterministic bucketing tuples. Implementations must compute the same float in [0, 1) for each (flagKey, identifier, seed). Match precision: 10 decimal places.",
+    "cases": [
+      { "flagKey": "new-checkout", "identifier": "alice", "seed": "01HF3W0AXNVZ", "expected": 0.8079720961 },
+      { "flagKey": "new-checkout", "identifier": "bob", "seed": "01HF3W0AXNVZ", "expected": 0.7657475678 },
+      { "flagKey": "new-checkout", "identifier": "carol", "seed": "01HF3W0AXNVZ", "expected": 0.3716918741 },
+      { "flagKey": "different-flag", "identifier": "alice", "seed": "01HF3W0AXNVZ", "expected": 0.4961896004 },
+      { "flagKey": "new-checkout", "identifier": "alice", "seed": "another-seed", "expected": 0.4708861575 }
+    ]
+  }
+}
