@@ -74,7 +74,7 @@ export class Pennant {
     }
 
     if (!this.destroyed) {
-      void this.refresh().catch((err) => this.emit('error', err));
+      void this.refreshInternal().catch((err) => this.emit('error', err));
       this.startSse();
       this.startPolling();
     }
@@ -155,9 +155,14 @@ export class Pennant {
     this.emit('update', { reason: 'context_changed' });
   }
 
+  /** Force a fresh snapshot fetch. Useful for tests + opt-in manual refresh. */
+  async refresh(): Promise<void> {
+    return this.refreshInternal();
+  }
+
   // ----- Internal -----
 
-  private async refresh(): Promise<void> {
+  private async refreshInternal(): Promise<void> {
     const url = new URL(`${this.options.apiBase}/v1/snapshot`);
     url.searchParams.set('environment', this.options.environment);
     if (this.isClientKey()) {
@@ -209,7 +214,7 @@ export class Pennant {
         // The broadcaster signals a change; refresh the snapshot to pick up
         // the new state. This trades one round-trip for simpler event
         // protocol on the wire.
-        void this.refresh().catch((err) => this.emit('error', err));
+        void this.refreshInternal().catch((err) => this.emit('error', err));
       };
       this.sseInstance = sse;
     } catch (err) {
@@ -221,7 +226,7 @@ export class Pennant {
     if (this.options.pollIntervalMs <= 0) return;
     this.pollTimer = setInterval(() => {
       if (this.destroyed) return;
-      void this.refresh().catch((err) => this.emit('error', err));
+      void this.refreshInternal().catch((err) => this.emit('error', err));
     }, this.options.pollIntervalMs);
   }
 

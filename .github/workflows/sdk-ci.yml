@@ -15,8 +15,8 @@ on:
       - "tests/corpus/**"
       - ".github/workflows/sdk-ci.yml"
 
-# PHP / Python / Go SDK jobs land in Phase 7. Until then this workflow only
-# runs the TypeScript SDK and the cross-implementation drift corpus check.
+# Phase 7 ships TypeScript + React + PHP + Python SDKs. Vue / Svelte / Go
+# are v2 ports — when they land they get a new job here.
 
 jobs:
   typescript:
@@ -33,3 +33,51 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  react:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/react
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build TS core (peer)
+        run: |
+          cd ../typescript
+          npm install --no-audit --no-fund
+          npm run build
+      - run: npm install --no-audit --no-fund
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  php:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/php
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: vendor/bin/phpunit
+
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .[test]
+      - run: pytest -v
