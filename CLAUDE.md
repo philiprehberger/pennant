@@ -53,7 +53,7 @@ The whole thing is a sales artifact — every file is something a prospective cl
 
 ## Deployment
 
-- **All halves build locally and rsync to the EC2 host** (54.190.150.0). No CI-hosted builds.
+- **All halves build locally and rsync to the EC2 host** (35.80.110.71). No CI-hosted builds.
 - **Apache + Let's Encrypt** for SSL on `pennant.philiprehberger.com` and `api.pennant.philiprehberger.com`. Vhost edits go in `infra/apache/` *and* on the server — keep them in sync.
 - **PM2 port (next free per `/var/www/ecosystem.config.js`)** for the Next.js docs site. The reverse-proxy vhost forwards there.
 - **MySQL `pennant` schema** on the EC2 host. The DB password lives in `/var/www/pennant/shared/.env` on the server and in `.local/server-secrets.env` locally (both gitignored).
